@@ -1,18 +1,33 @@
 FROM php:8.1-fpm
 
-# set your user name, ex: user=bernardo
-ARG user=carlos
+# Arguments defined in docker-compose.yml
+ARG user=user
 ARG uid=1000
+
+COPY xdebug.ini "${PHP_INI_DIR}/conf.d/"
+RUN pecl install xdebug-3.1.5
+RUN docker-php-ext-enable xdebug
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
+    build-essential \
     git \
     curl \
     libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    libjpeg62-turbo-dev \
+    libmcrypt-dev \
+    libgd-dev \
+    jpegoptim optipng pngquant gifsicle \
     libonig-dev \
     libxml2-dev \
     zip \
-    unzip
+    sudo \
+    unzip \
+    npm \
+    nodejs
+
 
 # Clear cache
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -20,6 +35,27 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 # Install PHP extensions
 RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd sockets
 
+RUN apt-get update && \
+     apt-get install -y \
+         libzip-dev \
+         && docker-php-ext-install zip
+ \
+    # Install LDAP
+RUN \
+    apt-get update && \
+    apt-get install libldap2-dev -y && \
+    rm -rf /var/lib/apt/lists/* && \
+    docker-php-ext-configure ldap --with-libdir=lib/x86_64-linux-gnu/ && \
+    docker-php-ext-install ldap
+
+RUN docker-php-ext-configure bcmath
+RUN docker-php-ext-install bcmath
+# Clear cache
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install PHP extensions
+RUN docker-php-ext-configure gd --enable-gd --with-freetype --with-jpeg
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 # Get latest Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
@@ -35,8 +71,5 @@ RUN pecl install -o -f redis \
 
 # Set working directory
 WORKDIR /var/www
-
-# Copy custom configurations PHP
-COPY docker/php/custom.ini /usr/local/etc/php/conf.d/custom.ini
 
 USER $user
